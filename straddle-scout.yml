@@ -1,0 +1,97 @@
+name: Straddle Scout
+
+on:
+  schedule:
+    # ── NIFTY (Thursday expiry) ── IST = UTC+5:30 ────────────────────────────
+    - cron: "46 3 * * 4"   # 09:16 IST
+    - cron: "0 4 * * 4"    # 09:30 IST
+    - cron: "15 4 * * 4"   # 09:45 IST
+
+    # ── SENSEX (Friday expiry) ────────────────────────────────────────────────
+    - cron: "46 3 * * 5"   # 09:16 IST
+    - cron: "0 4 * * 5"    # 09:30 IST
+    - cron: "15 4 * * 5"   # 09:45 IST
+
+  # Manual trigger from GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      index:
+        description: "Index to run"
+        required: true
+        default: "NIFTY"
+        type: choice
+        options:
+          - NIFTY
+          - SENSEX
+
+jobs:
+  scout:
+    name: Run Scout
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # ── Secrets passed as environment variables ───────────────────────────────
+    # config.py reads these via os.environ — no file generation needed.
+    env:
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      STRADDLE:   ${{ secrets.STRADDLE }}
+      # Optional Telegram — safe to leave unset
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python setup ──────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # ── 3. Install dependencies ──────────────────────────────────────────────
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── 4. Determine which index to run ─────────────────────────────────────
+      - name: Determine index
+        id: index
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.index }}" >> $GITHUB_OUTPUT
+          else
+            DAY=$(date -u +%u)   # 4=Thursday, 5=Friday
+            if [ "$DAY" = "4" ]; then
+              echo "value=NIFTY" >> $GITHUB_OUTPUT
+            elif [ "$DAY" = "5" ]; then
+              echo "value=SENSEX" >> $GITHUB_OUTPUT
+            else
+              echo "value=UNKNOWN" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      # ── 5. Abort if not an expiry day ────────────────────────────────────────
+      - name: Check expiry day
+        if: steps.index.outputs.value == 'UNKNOWN'
+        run: |
+          echo "Not an expiry day — nothing to do."
+          exit 0
+
+      # ── 6. Run the scout ─────────────────────────────────────────────────────
+      - name: Run Straddle Scout
+        if: steps.index.outputs.value != 'UNKNOWN'
+        run: python main.py --now ${{ steps.index.outputs.value }}
+
+      # ── 7. Upload logs ───────────────────────────────────────────────────────
+      - name: Upload run logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-logs-${{ steps.index.outputs.value }}-${{ github.run_number }}
+          path: |
+            scout.log
+            scout_log.db
+          retention-days: 30
+          if-no-files-found: ignore

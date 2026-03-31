@@ -10,7 +10,7 @@ from logger import get_logger, log_run
 from expiry import is_expiry_today, get_nearest_expiry
 from spot_client import get_spot_price
 from nse_client import fetch_options_chain, get_nearest_expiry as chain_nearest_expiry
-from signal import get_atm_straddle, evaluate_signal, compute_breakeven
+from straddle_signal import get_atm_straddle, evaluate_signal, compute_breakeven
 from alert import send_alerts
 
 log = get_logger(__name__)
