@@ -4,9 +4,12 @@ Edit these values before running the agent.
 """
 
 # ── Email settings ────────────────────────────────────────────────────────────
-EMAIL_SENDER     = "your_email@gmail.com"
-EMAIL_PASSWORD   = "your_app_password"        # Use Gmail App Password, not your real password
-EMAIL_RECIPIENTS = ["your_email@gmail.com"]   # Can be a list for multiple recipients
+import os
+
+
+EMAIL_SENDER     = os.environ["GMAIL_USER"]
+EMAIL_PASSWORD   = os.environ["STRADDLE"]        # Use Gmail App Password, not your real password
+EMAIL_RECIPIENTS = ["benny_gj@yahoo.co.in"]   # Can be a list for multiple recipients
 SMTP_HOST        = "smtp.gmail.com"
 SMTP_PORT        = 587
 
