@@ -2,14 +2,12 @@ name: Straddle Scout
 
 on:
   schedule:
-    # NIFTY — Thursday expiry (IST = UTC+5:30)
-    - cron: "46 3 * * 4"   # 09:16 IST
-    - cron: "0 4 * * 4"    # 09:30 IST
-    - cron: "15 4 * * 4"   # 09:45 IST
-    # SENSEX — Friday expiry
-    - cron: "46 3 * * 5"   # 09:16 IST
-    - cron: "0 4 * * 5"    # 09:30 IST
-    - cron: "15 4 * * 5"   # 09:45 IST
+    - cron: "46 3 * * 4"   # NIFTY 09:16 IST
+    - cron: "0 4 * * 4"    # NIFTY 09:30 IST
+    - cron: "15 4 * * 4"   # NIFTY 09:45 IST
+    - cron: "46 3 * * 5"   # SENSEX 09:16 IST
+    - cron: "0 4 * * 5"    # SENSEX 09:30 IST
+    - cron: "15 4 * * 5"   # SENSEX 09:45 IST
 
   workflow_dispatch:
     inputs:
