@@ -1,8 +1,3 @@
-"""
-config.py — Central configuration for Straddle Scout
-Credentials are read from environment variables (set locally via .env or GitHub Secrets).
-"""
-
 import os
 
 # ── Email settings ────────────────────────────────────────────────────────────

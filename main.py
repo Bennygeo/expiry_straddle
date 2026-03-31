@@ -1,16 +1,3 @@
-"""
-main.py — Scheduler entrypoint
-
-Runs the Straddle Scout on expiry days at multiple times (9:16, 9:30, 9:45 IST)
-so you get a fresh read at different points after market open.
-
-Usage:
-    python main.py              # Start the scheduler (runs forever)
-    python main.py --now NIFTY  # Manual one-shot run for NIFTY (ignores expiry check)
-    python main.py --now SENSEX # Manual one-shot run for SENSEX
-    python main.py --history    # Print last 20 runs from the DB
-"""
-
 import argparse
 import sys
 
