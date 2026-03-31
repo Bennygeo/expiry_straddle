@@ -2,27 +2,19 @@ name: Straddle Scout
 
 on:
   schedule:
-    # ── NIFTY (Thursday expiry) — 3 runs in IST (UTC+5:30) ──────────────────
-    # 09:16 IST = 03:46 UTC
-    - cron: "46 3 * * 4"
-    # 09:30 IST = 04:00 UTC
-    - cron: "0 4 * * 4"
-    # 09:45 IST = 04:15 UTC
-    - cron: "15 4 * * 4"
+    # NIFTY — Thursday expiry (IST = UTC+5:30)
+    - cron: "46 3 * * 4"   # 09:16 IST
+    - cron: "0 4 * * 4"    # 09:30 IST
+    - cron: "15 4 * * 4"   # 09:45 IST
+    # SENSEX — Friday expiry
+    - cron: "46 3 * * 5"   # 09:16 IST
+    - cron: "0 4 * * 5"    # 09:30 IST
+    - cron: "15 4 * * 5"   # 09:45 IST
 
-    # ── SENSEX (Friday expiry) — 3 runs in IST (UTC+5:30) ───────────────────
-    # 09:16 IST = 03:46 UTC
-    - cron: "46 3 * * 5"
-    # 09:30 IST = 04:00 UTC
-    - cron: "0 4 * * 5"
-    # 09:45 IST = 04:15 UTC
-    - cron: "15 4 * * 5"
-
-  # Allow manual trigger from GitHub Actions UI
   workflow_dispatch:
     inputs:
       index:
-        description: "Index to run (NIFTY or SENSEX)"
+        description: "Index to run"
         required: true
         default: "NIFTY"
         type: choice
@@ -30,110 +22,49 @@ on:
           - NIFTY
           - SENSEX
 
-env:
-  PYTHON_VERSION: "3.11"
-
 jobs:
   scout:
-    name: Run Scout — ${{ github.event.inputs.index || 'Scheduled' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    env:
+      GMAIL_USER: ${{ secrets.GMAIL_USER }}
+      STRADDLE:   ${{ secrets.STRADDLE }}
+
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────────
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # ── 2. Python setup ──────────────────────────────────────────────────────
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "3.11"
           cache: pip
 
-      # ── 3. Install dependencies ──────────────────────────────────────────────
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # ── 4. Write config from GitHub Secrets ─────────────────────────────────
-      - name: Write config from secrets
-        run: |
-          cat > config.py << 'EOF'
-          EMAIL_SENDER     = "${{ secrets.EMAIL_SENDER }}"
-          EMAIL_PASSWORD   = "${{ secrets.EMAIL_PASSWORD }}"
-          EMAIL_RECIPIENTS = ${{ secrets.EMAIL_RECIPIENTS }}
-          SMTP_HOST        = "smtp.gmail.com"
-          SMTP_PORT        = 587
-
-          TELEGRAM_BOT_TOKEN = ${{ secrets.TELEGRAM_BOT_TOKEN || 'None' }}
-          TELEGRAM_CHAT_ID   = ${{ secrets.TELEGRAM_CHAT_ID || 'None' }}
-
-          INDICES = {
-              "NIFTY": {
-                  "symbol":          "NIFTY",
-                  "yf_ticker":       "^NSEI",
-                  "lot_size":        50,
-                  "expiry_day":      3,
-                  "iv_threshold":    12.0,
-                  "max_premium_pct": 1.5,
-                  "run_times":       ["09:16", "09:30", "09:45"],
-              },
-              "SENSEX": {
-                  "symbol":          "SENSEX",
-                  "yf_ticker":       "^BSESN",
-                  "lot_size":        10,
-                  "expiry_day":      4,
-                  "iv_threshold":    12.0,
-                  "max_premium_pct": 1.5,
-                  "run_times":       ["09:16", "09:30", "09:45"],
-              },
-          }
-
-          PCR_MIN  = 0.7
-          PCR_MAX  = 1.5
-          DB_PATH  = "scout_log.db"
-          LOG_FILE = "scout.log"
-
-          NSE_REQUEST_TIMEOUT = 15
-          NSE_RETRY_ATTEMPTS  = 3
-          NSE_RETRY_DELAY     = 5
-          EOF
-
-      # ── 5. Determine which index to run ─────────────────────────────────────
       - name: Determine index
         id: index
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "value=${{ github.event.inputs.index }}" >> $GITHUB_OUTPUT
           else
-            DAY=$(date -u +%u)   # 4=Thursday, 5=Friday
-            if [ "$DAY" = "4" ]; then
-              echo "value=NIFTY" >> $GITHUB_OUTPUT
-            elif [ "$DAY" = "5" ]; then
-              echo "value=SENSEX" >> $GITHUB_OUTPUT
-            else
-              echo "value=UNKNOWN" >> $GITHUB_OUTPUT
-            fi
+            DAY=$(date -u +%u)
+            [ "$DAY" = "4" ] && echo "value=NIFTY" >> $GITHUB_OUTPUT
+            [ "$DAY" = "5" ] && echo "value=SENSEX" >> $GITHUB_OUTPUT
+            [ "$DAY" != "4" ] && [ "$DAY" != "5" ] && echo "value=SKIP" >> $GITHUB_OUTPUT
           fi
 
-      # ── 6. Abort if wrong day (safety net) ──────────────────────────────────
-      - name: Abort if not expiry day
-        if: steps.index.outputs.value == 'UNKNOWN'
-        run: |
-          echo "Not an expiry day. Nothing to do."
-          exit 0
-
-      # ── 7. Run the scout ─────────────────────────────────────────────────────
-      - name: Run Straddle Scout
-        if: steps.index.outputs.value != 'UNKNOWN'
+      - name: Run Scout
+        if: steps.index.outputs.value != 'SKIP'
         run: python main.py --now ${{ steps.index.outputs.value }}
 
-      # ── 8. Upload logs as artifact ───────────────────────────────────────────
-      - name: Upload run logs
+      - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: scout-logs-${{ steps.index.outputs.value }}-${{ github.run_number }}
+          name: logs-${{ github.run_number }}
           path: |
             scout.log
             scout_log.db
